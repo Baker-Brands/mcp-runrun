@@ -120,7 +120,7 @@ appended). Rate-limited (429) requests are retried with backoff.
 | `export_tasks` | Filter + extract every matching card into uniform, spreadsheet-ready rows |
 | `list_boards` / `get_board` | Discover boards / board IDs for filtering |
 | `get_task` | Get a task by ID |
-| `create_task` | Create a new task. Optional `board_id`/`board_stage_id` move it to the right board immediately (the API always creates on the default board) |
+| `create_task` | Create a new task. Optional `board_id`/`board_stage_id` move it to the right board immediately (the API always creates on the default board). Optional `follower_ids` (user slugs) adds followers/seguidores at creation |
 | `update_task` | Update task fields |
 | `delete_task` | Delete a task |
 | `play_task` | Start timer on a task |
@@ -130,6 +130,9 @@ appended). Rate-limited (429) requests are retried with backoff.
 | `list_task_comments` | List comments on a task |
 | `add_task_comment` | Add a comment to a task |
 | `list_task_attachments` | List attachments on a task |
+| `list_task_followers` | List the followers (seguidores) of a task |
+| `add_task_followers` | Add one or more users (slugs) as followers of a task |
+| `remove_task_follower` | Remove a follower from a task |
 | `list_projects` | List projects |
 | `get_project` | Get a project by ID |
 | `create_project` | Create a project |

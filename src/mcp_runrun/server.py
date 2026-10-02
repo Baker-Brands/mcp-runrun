@@ -511,8 +511,11 @@ TOOLS: list[Tool] = [
           {"task_id": _int("Task ID")}, ["task_id"]),
     _tool("create_task", "Create a new task. The Runrun.it API always creates the task on the default "
           "board; pass board_id (and optionally board_stage_id) to have it moved to the right board "
-          "immediately after creation, in a single call.",
+          "immediately after creation, in a single call. Pass follower_ids to add followers "
+          "(seguidores) at creation; the response's follower_ids confirms who follows the task.",
           {"title": _str("Task title"), "project_id": _int("Project ID"),
+           "follower_ids": _arr("User IDs (slugs like 'isabel-rezende', see list_users) to add as "
+                                "followers of the new task"),
            "responsible_id": _str("Responsible user ID"), "type_id": _int("Task type ID"),
            "description": _str("Task description"), "desired_date": _str("Desired date (YYYY-MM-DD)"),
            "desired_start_date": _str("Desired start date (YYYY-MM-DD)"),
@@ -577,6 +580,14 @@ TOOLS: list[Tool] = [
           ["task_id", "values"]),
     _tool("list_task_attachments", "List all file attachments on a task.",
           {"task_id": _int("Task ID")}, ["task_id"]),
+    _tool("list_task_followers", "List the followers of a task.",
+          {"task_id": _int("Task ID")}, ["task_id"]),
+    _tool("add_task_followers", "Add one or more users as followers of a task. User IDs are slugs "
+          "like 'isabel-rezende' (use list_users to resolve). Returns the task's follower_ids after the change.",
+          {"task_id": _int("Task ID"), "user_ids": _arr("User IDs (slugs) to add as followers")},
+          ["task_id", "user_ids"]),
+    _tool("remove_task_follower", "Remove a follower from a task.",
+          {"task_id": _int("Task ID"), "user_id": _str("User ID (slug)")}, ["task_id", "user_id"]),
 
     # ── Teams ──────────────────────────────────────────────────────────────────
     _tool("list_teams", "List all teams.", {}),
@@ -875,7 +886,8 @@ async def call_tool(client: RunrunClient, name: str, args: dict[str, Any]) -> An
             a2 = dict(a); a2.pop("id", None)
             board_id = a2.pop("board_id", None)
             board_stage_id = a2.pop("board_stage_id", None)
-            task = await client.create_task(**a2)
+            follower_ids = a2.pop("follower_ids", None)
+            task = await client.create_task_with_followers(follower_ids=follower_ids, **a2)
             if board_id and isinstance(task, dict) and task.get("id"):
                 extra = {"board_stage_id": board_stage_id} if board_stage_id else {}
                 await client.change_task_board(task["id"], board_id, **extra)
@@ -905,6 +917,9 @@ async def call_tool(client: RunrunClient, name: str, args: dict[str, Any]) -> An
         case "list_field_options": return await client.list_field_options(a["field_id"])
         case "set_task_fields": return await client.set_task_fields(a["task_id"], a["values"])
         case "list_task_attachments": return await client.list_task_attachments(a["task_id"])
+        case "list_task_followers": return await client.list_task_followers(a["task_id"])
+        case "add_task_followers": return await client.add_task_followers(a["task_id"], list(a["user_ids"]))
+        case "remove_task_follower": return await client.remove_task_follower(a["task_id"], a["user_id"])
         # Teams
         case "list_teams": return await client.list_teams()
         case "get_team": return await client.get_team(a["id"])

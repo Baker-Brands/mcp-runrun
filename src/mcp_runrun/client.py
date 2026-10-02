@@ -680,6 +680,64 @@ class RunrunClient:
     async def list_task_attachments(self, task_id: int) -> Any:
         return await self._get(f"/tasks/{task_id}/documents")
 
+    # ── Task followers ─────────────────────────────────────────────────────────
+    async def list_task_followers(self, task_id: int) -> Any:
+        return await self._get(f"/tasks/{task_id}/followers")
+
+    async def add_task_followers(self, task_id: int, user_ids: list[str]) -> dict[str, Any]:
+        """Add followers via POST /tasks/:id/followers.
+
+        Per the Runrun.it docs the body is {"id": "<user slug>"}; the older
+        shapes are kept as fallbacks. The result is verified against the
+        task's follower_ids.
+        """
+        bodies = (
+            lambda uid: {"id": uid},
+            lambda uid: {"user_id": uid},
+            lambda uid: {"follower": {"user_id": uid}},
+        )
+        results: dict[str, Any] = {}
+        for uid in user_ids:
+            errors: list[str] = []
+            for make in bodies:
+                try:
+                    await self._post(f"/tasks/{task_id}/followers", make(uid))
+                    results[uid] = "added"
+                    break
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code not in (400, 404, 422):
+                        raise
+                    errors.append(f"{exc.response.status_code}: {exc.response.text[:200]}")
+            else:
+                results[uid] = {"error": errors}
+        task = await self.get_task(task_id)
+        return {"task_id": task_id, "results": results,
+                "follower_ids": task.get("follower_ids", [])}
+
+    async def create_task_with_followers(self, follower_ids: list[str] | None = None,
+                                         **data: Any) -> Any:
+        """Create a task and guarantee the requested followers are attached.
+
+        follower_ids is sent in the creation body (task[follower_ids], per the
+        docs); any id the API did not register is then added one by one via
+        POST /tasks/:id/followers so the caller always gets the full set.
+        """
+        wanted = [str(u) for u in (follower_ids or []) if u]
+        if wanted:
+            data["follower_ids"] = wanted
+        task = await self.create_task(**data)
+        if wanted and isinstance(task, dict) and task.get("id"):
+            have = set(task.get("follower_ids") or [])
+            missing = [u for u in wanted if u not in have]
+            if missing:
+                added = await self.add_task_followers(task["id"], missing)
+                task = await self.get_task(task["id"])
+                task["_followers_added_after_create"] = added["results"]
+        return task
+
+    async def remove_task_follower(self, task_id: int, user_id: str) -> Any:
+        return await self._delete(f"/tasks/{task_id}/followers/{user_id}")
+
     # ── Content extraction & standardized export ────────────────────────────────
     async def _field_label_map_cached(self, sample_task_id: int) -> dict[str, str]:
         """Fetch & cache the org-wide custom-field id→label map (uses any task).
